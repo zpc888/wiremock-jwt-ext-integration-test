@@ -1,0 +1,51 @@
+spring:
+  application:
+    name: configurable-peer-service
+  mvc:
+    problemdetails:
+      enabled: true
+
+server:
+  port: ${SERVER_PORT:8080}
+
+management:
+  server:
+    port: ${MANAGEMENT_PORT:8081}
+    address: ${MANAGEMENT_ADDRESS:127.0.0.1}
+  endpoints:
+    web:
+      exposure:
+        include: health,metrics
+  endpoint:
+    health:
+      show-details: never
+
+service:
+  instance-id: ${SERVICE_INSTANCE_ID:}
+  connect-timeout: ${SERVICE_CONNECT_TIMEOUT:2s}
+  peer-response-timeout: ${SERVICE_PEER_RESPONSE_TIMEOUT:10s}
+  token-response-timeout: ${SERVICE_TOKEN_RESPONSE_TIMEOUT:5s}
+  jwks-response-timeout: ${SERVICE_JWKS_RESPONSE_TIMEOUT:5s}
+  peer:
+    base-url: ${SERVICE_PEER_BASE_URL:}
+    instance-id: ${SERVICE_PEER_INSTANCE_ID:}
+    required-scopes: ${SERVICE_PEER_REQUIRED_SCOPES:}
+  oauth:
+    token-url: ${SERVICE_OAUTH_TOKEN_URL:}
+    client-id: ${SERVICE_OAUTH_CLIENT_ID:}
+    client-secret: ${SERVICE_OAUTH_CLIENT_SECRET:}
+    refresh-skew: ${SERVICE_OAUTH_REFRESH_SKEW:30s}
+  jwt:
+    verification-mode: ${SERVICE_JWT_VERIFICATION_MODE:JWKS}
+    issuer: ${SERVICE_JWT_ISSUER:}
+    audiences: ${SERVICE_JWT_AUDIENCES:}
+    required-scopes: ${SERVICE_JWT_REQUIRED_SCOPES:}
+    scope-claim: ${SERVICE_JWT_SCOPE_CLAIM:scope}
+    clock-skew: ${SERVICE_JWT_CLOCK_SKEW:60s}
+    jwks:
+      jwk-set-url: ${SERVICE_JWT_JWKS_URL:}
+    keystore:
+      location: ${SERVICE_JWT_KEYSTORE_LOCATION:}
+      type: ${SERVICE_JWT_KEYSTORE_TYPE:PKCS12}
+      password: ${SERVICE_JWT_KEYSTORE_PASSWORD:}
+      alias: ${SERVICE_JWT_KEYSTORE_ALIAS:}

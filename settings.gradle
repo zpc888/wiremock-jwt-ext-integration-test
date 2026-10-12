@@ -1,0 +1,3 @@
+rootProject.name = 'wiremock-jwt-ext-integration-test'
+
+include 'service-app'

@@ -1,0 +1,17 @@
+service:
+  instance-id: instance-b
+  peer:
+    base-url: ${SERVICE_PEER_BASE_URL:http://localhost:8080}
+    instance-id: instance-a
+    required-scopes: peer.private
+  oauth:
+    token-url: ${SERVICE_OAUTH_TOKEN_URL:http://localhost:9090/oauth/token}
+    client-id: ${SERVICE_OAUTH_CLIENT_ID:instance-b}
+    client-secret: ${SERVICE_OAUTH_CLIENT_SECRET:replace-me}
+  jwt:
+    verification-mode: ${SERVICE_JWT_VERIFICATION_MODE:JWKS}
+    issuer: ${SERVICE_JWT_ISSUER:https://issuer.example.test}
+    audiences: peer-api
+    required-scopes: peer.private
+    jwks:
+      jwk-set-url: ${SERVICE_JWT_JWKS_URL:http://localhost:9090/.well-known/jwks.json}
