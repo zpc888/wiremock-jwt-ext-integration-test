@@ -19,20 +19,28 @@ import tools.jackson.databind.json.JsonMapper;
 
 @Component
 class PeerClient {
+    static final String CALLER_APPLICATION_NAME_HEADER = "X-Caller-App-Name";
+
     private static final Logger LOG = LoggerFactory.getLogger(PeerClient.class);
 
     private final RestClient restClient;
     private final OAuthTokenClient tokenClient;
     private final ServiceProperties properties;
+    private final String applicationName;
     private final Function<String, Map<String, Object>> fnBase64JsonToMap;
 
-    PeerClient(RestClient.Builder builder, OAuthTokenClient tokenClient, ServiceProperties properties) {
+    PeerClient(
+            RestClient.Builder builder,
+            OAuthTokenClient tokenClient,
+            ServiceProperties properties,
+            @org.springframework.beans.factory.annotation.Value("${spring.application.name}") String applicationName) {
         SimpleClientHttpRequestFactory requestFactory = new SimpleClientHttpRequestFactory();
         requestFactory.setConnectTimeout(properties.getConnectTimeout());
         requestFactory.setReadTimeout(properties.getPeerResponseTimeout());
         this.restClient = builder.requestFactory(requestFactory).build();
         this.tokenClient = tokenClient;
         this.properties = properties;
+        this.applicationName = applicationName;
         JsonMapper jsonMapper = JsonMapper.builder().enable(SerializationFeature.INDENT_OUTPUT).build();
         this.fnBase64JsonToMap = s -> {
             byte[] bytes = Base64.getDecoder().decode(s);
@@ -73,6 +81,7 @@ class PeerClient {
                     .headers(headers -> {
                         headers.setBearerAuth(accessToken);
                         headers.set(RequestIdFilter.HEADER, requestId);
+                        headers.set(CALLER_APPLICATION_NAME_HEADER, applicationName);
                     })
                     .retrieve()
                     .onStatus(HttpStatusCode::isError, (request, response) -> {

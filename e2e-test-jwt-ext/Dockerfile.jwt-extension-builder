@@ -1,0 +1,5 @@
+FROM eclipse-temurin:17-jdk
+
+RUN apt-get update -qq \
+    && apt-get install --no-install-recommends -y -qq git \
+    && rm -rf /var/lib/apt/lists/*

@@ -3,36 +3,44 @@ package com.example.serviceapp;
 import java.util.Map;
 
 import jakarta.servlet.http.HttpServletRequest;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RestController;
 
 @RestController
 class JwtItController {
 
-    private final ServiceProperties properties;
     private final PeerClient peerClient;
+    private final String applicationName;
 
-    JwtItController(ServiceProperties properties, PeerClient peerClient) {
-        this.properties = properties;
+    JwtItController(
+            PeerClient peerClient,
+            @Value("${spring.application.name}") String applicationName) {
         this.peerClient = peerClient;
+        this.applicationName = applicationName;
     }
 
     @GetMapping("/api/public")
     PublicResponse publicApi(HttpServletRequest request) {
         return new PublicResponse(
-                properties.getInstanceId(),
-                properties.getPeer().getInstanceId(),
+                applicationName,
                 peerClient.privateResponse(RequestIdFilter.requestId(request)));
     }
 
     @GetMapping("/api/private")
-    PrivateResponse privateApi() {
-        return new PrivateResponse(properties.getInstanceId(), "private response");
+    PrivateResponse privateApi(
+            @RequestHeader(PeerClient.CALLER_APPLICATION_NAME_HEADER) String callerApplicationName) {
+        if (applicationName.equals(callerApplicationName)) {
+            throw new SelfPrivateApiInvocationException();
+        }
+        return new PrivateResponse(applicationName, "private response");
     }
 
-    record PublicResponse(String instanceId, String peerInstanceId, Map<String, Object> peerResponse) {
+    record PublicResponse(String applicationName, Map<String, Object> peerResponse) {
     }
 
-    record PrivateResponse(String instanceId, String message) {
+    record PrivateResponse(String applicationName, String message) {
     }
 }

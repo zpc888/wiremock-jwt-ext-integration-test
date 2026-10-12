@@ -1,0 +1,192 @@
+name: e2e-test-jwt-ext
+
+x-host-user: &host-user
+  user: "${HOST_UID:?Run ./compose.sh so generated files use your UID}:${HOST_GID:?Run ./compose.sh so generated files use your GID}"
+
+services:
+  jwt-extension-builder:
+    <<: *host-user
+    build:
+      context: .
+      dockerfile: Dockerfile.jwt-extension-builder
+    volumes:
+      - ./containers-config/wiremock/extension-jwt:/output
+    environment:
+      HOME: /tmp
+      GRADLE_USER_HOME: /tmp/.gradle
+    command:
+      - /bin/sh
+      - -ec
+      - |
+        if [ -f /output/wiremock-jwt-extension-standalone-1.0.0-SNAPSHOT.jar ]; then
+          exit 0
+        fi
+        git clone --depth 1 --branch feature/config-signing-keys \
+          https://github.com/zpc888/wiremock-jwt-extension.git /tmp/wire-mock-extension
+        cd /tmp/wire-mock-extension
+        ./gradlew check --no-daemon
+        cp build/libs/wiremock-jwt-extension-standalone-1.0.0-SNAPSHOT.jar /output/
+
+  key-generator:
+    <<: *host-user
+    build:
+      context: .
+      dockerfile: Dockerfile.key-generator
+    environment:
+      TRUSTSTORE_PASSWORD: ${TRUSTSTORE_PASSWORD:-changeit}
+      TRUSTSTORE_ALIAS: ${TRUSTSTORE_ALIAS:-jwt-verifier}
+    volumes:
+      - ./containers-config/pre-defined-keys:/keys
+    command:
+      - /bin/sh
+      - -ec
+      - |
+        if [ -f /keys/private.pem ] && [ -f /keys/truststore.jks ]; then
+          exit 0
+        fi
+        rm -f /keys/private.pem /keys/public.crt /keys/truststore.jks
+        openssl genpkey -algorithm RSA -pkeyopt rsa_keygen_bits:2048 -out /keys/private.pem
+        openssl req -new -x509 -sha256 -days 3650 \
+          -key /keys/private.pem \
+          -out /keys/public.crt \
+          -subj /CN=wiremock-jwt-signer
+        keytool -importcert -noprompt \
+          -alias "$$TRUSTSTORE_ALIAS" \
+          -file /keys/public.crt \
+          -keystore /keys/truststore.jks \
+          -storetype JKS \
+          -storepass "$$TRUSTSTORE_PASSWORD"
+
+  wiremock-jwks:
+    image: wiremock/wiremock:3.13.1
+    depends_on:
+      jwt-extension-builder:
+        condition: service_completed_successfully
+    ports:
+      - "${WIREMOCK_JWKS_HOST_PORT:-8185}:8080"
+    volumes:
+      - ./containers-config/wiremock/extension-jwt:/var/wiremock/extensions:ro
+      - ./containers-config/wiremock/jwks/mappings:/home/wiremock/mappings:ro
+    command:
+      - --global-response-templating
+      - --verbose
+
+  wiremock-keystore:
+    image: wiremock/wiremock:3.13.1
+    depends_on:
+      jwt-extension-builder:
+        condition: service_completed_successfully
+      key-generator:
+        condition: service_completed_successfully
+    environment:
+      JAVA_OPTS: >-
+        -Dextension.jwt.rs256.privateKeyFile=/keys/private.pem
+        -Dextension.jwt.rs256.publicKeyId=compose-signing-key-1
+    ports:
+      - "${WIREMOCK_SIGNING_HOST_PORT:-8186}:8080"
+    volumes:
+      - ./containers-config/wiremock/extension-jwt:/var/wiremock/extensions:ro
+      - ./containers-config/pre-defined-keys:/keys:ro
+      - ./containers-config/wiremock/signing/mappings:/home/wiremock/mappings:ro
+    command:
+      - --global-response-templating
+      - --verbose
+
+  wiremock-jwt-header:
+    image: wiremock/wiremock:3.13.1
+    depends_on:
+      jwt-extension-builder:
+        condition: service_completed_successfully
+    environment:
+      JAVA_OPTS: >-
+        -Dextension.jwt.header.name=jwt_hdr
+    ports:
+      - "${WIREMOCK_JWKS_HOST_PORT:-8187}:8080"
+    volumes:
+      - ./containers-config/wiremock/extension-jwt:/var/wiremock/extensions:ro
+      - ./containers-config/wiremock/test-jwt-header/mappings:/home/wiremock/mappings:ro
+      - ./containers-config/wiremock/test-jwt-header/__files:/home/wiremock/__files:ro
+    command:
+      - --global-response-templating
+      - --verbose
+
+  # jwks client will call service where it uses jwks to verify jwt signature
+  service-jwks-client:
+    build:
+      context: ..
+      dockerfile: e2e-test-jwt-ext/Dockerfile.service-app
+    depends_on:
+      wiremock-jwks:
+        condition: service_started
+    environment:
+      SPRING_PROFILES_ACTIVE: keystore
+      SPRING_APPLICATION_NAME: verify-jwt-sig-with-keystore
+      SERVICE_PEER_BASE_URL: http://service-keystore-client:8080
+      SERVICE_JWT_KEYSTORE_LOCATION: file:/keys/truststore.jks
+      SERVICE_JWT_KEYSTORE_TYPE: JKS
+      SERVICE_JWT_KEYSTORE_PASSWORD: ${TRUSTSTORE_PASSWORD:-changeit}
+      SERVICE_JWT_KEYSTORE_ALIAS: ${TRUSTSTORE_ALIAS:-jwt-verifier}
+      SERVICE_JWT_ISSUER: https://issuer.example.test
+      SERVICE_JWT_REQUIRED_SCOPES: peer.private
+    ports:
+      - "8181:8080"
+
+# keystore client will call service where it uses pre-defined truststore to verify jwt signature
+  service-keystore-client:
+    build:
+      context: ..
+      dockerfile: e2e-test-jwt-ext/Dockerfile.service-app
+    depends_on:
+      key-generator:
+        condition: service_completed_successfully
+      wiremock-keystore:
+        condition: service_started
+    environment:
+      SPRING_PROFILES_ACTIVE: jwks
+      SPRING_APPLICATION_NAME: verify-jwt-sig-with-jwks
+      SERVICE_PEER_BASE_URL: http://service-jwks-client:8080
+      SERVICE_OAUTH_TOKEN_URL: http://wiremock-jwks:8080/oauth/token
+      SERVICE_OAUTH_CLIENT_ID: caller-a
+      SERVICE_OAUTH_CLIENT_SECRET: ${OAUTH_CLIENT_SECRET:-secret}
+      SERVICE_JWT_JWKS_URL: http://wiremock-jwks:8080/.well-known/jwks.json
+      SERVICE_JWT_ISSUER: https://issuer.example.test
+      SERVICE_JWT_AUDIENCES: peer-api
+      SERVICE_JWT_REQUIRED_SCOPES: peer.private
+    ports:
+      - "8182:8080"
+    volumes:
+      - ./containers-config/pre-defined-keys:/keys:ro
+
+  verifier:
+    image: alpine:3.21
+    depends_on:
+      service-jwks-client:
+        condition: service_started
+      service-keystore-client:
+        condition: service_started
+      wiremock-keystore:
+        condition: service_started
+    command:
+      - /bin/sh
+      - -ec
+      - |
+        apk add --no-cache curl jq
+        wait_for_json() {
+          url="$$1"
+          expected_name="$$2"
+          for attempt in $$(seq 1 30); do
+            response=$$(curl --fail --silent --show-error "$$url" || true)
+            if printf '%s' "$$response" | jq -e \
+              --arg local "$$expected_name" \
+              '.applicationName == $$local and .peerResponse.applicationName != $$local' >/dev/null; then
+              return 0
+            fi
+            sleep 2
+          done
+          echo "Verification failed for $$url" >&2
+          exit 1
+        }
+        wait_for_json http://service-jwks:8080/api/public verify-jwt-sig-with-jwks
+        wait_for_json http://service-keystore:8080/api/public verify-jwt-sig-with-keystore
+        curl --fail --silent http://wiremock-keystore:8080/.well-known/jwks.json \
+          | jq -e '.keys[] | select(.kid == "compose-signing-key-1")' >/dev/null

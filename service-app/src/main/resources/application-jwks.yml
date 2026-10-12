@@ -1,17 +1,24 @@
+spring:
+  application:
+    name: verify-jwt-sig-with-jwks
+
 service:
-  instance-id: instance-b
   peer:
-    base-url: ${SERVICE_PEER_BASE_URL:http://localhost:8080}
-    instance-id: instance-a
+    base-url: ${SERVICE_PEER_BASE_URL:http://localhost:8082}
     required-scopes: peer.private
   oauth:
     token-url: ${SERVICE_OAUTH_TOKEN_URL:http://localhost:9090/oauth/token}
-    client-id: ${SERVICE_OAUTH_CLIENT_ID:instance-b}
+    client-id: ${SERVICE_OAUTH_CLIENT_ID:verify-jwt-sig-with-jwks}
     client-secret: ${SERVICE_OAUTH_CLIENT_SECRET:replace-me}
   jwt:
     verification-mode: ${SERVICE_JWT_VERIFICATION_MODE:JWKS}
     issuer: ${SERVICE_JWT_ISSUER:https://issuer.example.test}
     audiences: peer-api
     required-scopes: peer.private
+    header-claims:
+      typ: JWT
+    claim-equals:
+      /client_id: caller-a
+      /user_name: george
     jwks:
       jwk-set-url: ${SERVICE_JWT_JWKS_URL:http://localhost:9090/.well-known/jwks.json}

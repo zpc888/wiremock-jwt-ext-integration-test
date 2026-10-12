@@ -20,9 +20,6 @@ import org.springframework.validation.annotation.Validated;
 @ConfigurationProperties("service")
 public class ServiceProperties {
 
-    @NotBlank
-    private String instanceId;
-
     @Valid
     private Peer peer = new Peer();
 
@@ -43,14 +40,6 @@ public class ServiceProperties {
 
     @NotNull
     private Duration jwksResponseTimeout = Duration.ofSeconds(5);
-
-    public String getInstanceId() {
-        return instanceId;
-    }
-
-    public void setInstanceId(String instanceId) {
-        this.instanceId = instanceId;
-    }
 
     public Peer getPeer() {
         return peer;
@@ -112,9 +101,6 @@ public class ServiceProperties {
         @NotNull
         private URI baseUrl;
 
-        @NotBlank
-        private String instanceId;
-
         @NotEmpty
         private Set<@NotBlank String> requiredScopes = new LinkedHashSet<>();
 
@@ -124,14 +110,6 @@ public class ServiceProperties {
 
         public void setBaseUrl(URI baseUrl) {
             this.baseUrl = baseUrl;
-        }
-
-        public String getInstanceId() {
-            return instanceId;
-        }
-
-        public void setInstanceId(String instanceId) {
-            this.instanceId = instanceId;
         }
 
         public Set<String> getRequiredScopes() {

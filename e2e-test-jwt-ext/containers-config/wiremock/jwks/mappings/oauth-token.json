@@ -1,0 +1,16 @@
+{
+  "request": {
+    "method": "POST",
+    "urlPath": "/oauth/token"
+  },
+  "response": {
+    "status": 200,
+    "headers": {
+      "Content-Type": "application/json"
+    },
+    "body": "{\"access_token\":\"{{{jwt alg='RS256' iss='https://issuer.example.test' aud='peer-api' scope='peer.private' client_id='caller-a' user_name='george'}}}\",\"token_type\":\"Bearer\",\"expires_in\":300}",
+    "transformers": [
+      "response-template"
+    ]
+  }
+}

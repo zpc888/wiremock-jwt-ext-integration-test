@@ -14,9 +14,6 @@ class RuntimeConfigurationChecks {
     @Bean
     ApplicationRunner validateRuntimeConfiguration(ServiceProperties properties) {
         return arguments -> {
-            if (properties.getInstanceId().equals(properties.getPeer().getInstanceId())) {
-                throw new IllegalStateException("service.instance-id and service.peer.instance-id must differ");
-            }
             warnForHttp(properties.getPeer().getBaseUrl().toString(), "peer URL");
             warnForHttp(properties.getOauth().getTokenUrl().toString(), "token URL");
             if (properties.getJwt().getVerificationMode() == ServiceProperties.VerificationMode.JWKS) {

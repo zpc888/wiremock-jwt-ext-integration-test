@@ -1,0 +1,5 @@
+FROM eclipse-temurin:21-jdk
+
+RUN apt-get update -qq \
+    && apt-get install --no-install-recommends -y -qq openssl \
+    && rm -rf /var/lib/apt/lists/*

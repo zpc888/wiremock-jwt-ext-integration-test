@@ -16,4 +16,13 @@ class ApiExceptionHandler {
         problem.setProperty("requestId", RequestIdFilter.requestId(request));
         return problem;
     }
+
+    @ExceptionHandler(SelfPrivateApiInvocationException.class)
+    ProblemDetail selfPrivateApiInvocation(HttpServletRequest request) {
+        ProblemDetail problem = ProblemDetail.forStatusAndDetail(
+                HttpStatus.FORBIDDEN, "An application cannot call its own private API");
+        problem.setProperty("code", "self_private_call");
+        problem.setProperty("requestId", RequestIdFilter.requestId(request));
+        return problem;
+    }
 }

@@ -1,0 +1,5 @@
+{
+  "access_token":"{{formData request.body 'form' urlDecode=true}}{{{jwt jwt_hdr=(claimsObject header='header-key-in-jwt-header' cty='application/json') alg='HS256' iss='https://issuer.example.test' aud='peer-api' scope='peer.private' client_id='caller-a' user_name='george' source_application=(val form.source_app.[0] default='no-source-app')}}}",
+  "token_type":"Bearer",
+  "expires_in":300
+}

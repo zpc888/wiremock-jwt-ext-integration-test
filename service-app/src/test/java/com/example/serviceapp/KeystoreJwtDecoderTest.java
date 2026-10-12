@@ -35,12 +35,17 @@ import org.springframework.security.oauth2.jwt.JwtException;
 
 class KeystoreJwtDecoderTest {
 
+    private static final String KEYSTORE_PASSWORD = "changeit";
+    private static final Path KEYSTORE_PATH = Path.of(
+            System.getProperty("java.io.tmpdir"), "service-app-jwt-verifier.p12");
+
     @Test
     void verifiesRs256JwtWithConfiguredPkcs12Certificate() throws Exception {
         KeyPair trusted = keyPair();
-        Path keyStore = createKeyStore(trusted, "changeit");
+        Path keyStore = createKeyStoreAtConfiguredLocation(trusted);
         JwtDecoder decoder = new SecurityConfig().jwtDecoder(properties(keyStore));
 
+        assertThat(keyStore).exists();
         assertThat(decoder.decode(signedToken(trusted.getPrivate(), "trusted-key")).getSubject()).isEqualTo("service-a");
         assertThatThrownBy(() -> decoder.decode(signedToken(keyPair().getPrivate(), "other-key")))
                 .isInstanceOf(JwtException.class);
@@ -58,21 +63,20 @@ class KeystoreJwtDecoderTest {
         jwt.setClaimContains(java.util.Map.of("/tenants", "blue"));
         jwt.getKeystore().setLocation(new FileSystemResource(keyStore));
         jwt.getKeystore().setType("PKCS12");
-        jwt.getKeystore().setPassword("changeit");
+        jwt.getKeystore().setPassword(KEYSTORE_PASSWORD);
         jwt.getKeystore().setAlias("jwt");
         return properties;
     }
 
-    private static Path createKeyStore(KeyPair keyPair, String password) throws Exception {
+    private static Path createKeyStoreAtConfiguredLocation(KeyPair keyPair) throws Exception {
         KeyStore keyStore = KeyStore.getInstance("PKCS12");
-        keyStore.load(null, password.toCharArray());
+        keyStore.load(null, KEYSTORE_PASSWORD.toCharArray());
         keyStore.setCertificateEntry("jwt", certificate(keyPair));
         ByteArrayOutputStream output = new ByteArrayOutputStream();
-        keyStore.store(output, password.toCharArray());
-        Path path = Files.createTempFile("jwt-verifier-", ".p12");
-        Files.write(path, output.toByteArray());
-        path.toFile().deleteOnExit();
-        return path;
+        keyStore.store(output, KEYSTORE_PASSWORD.toCharArray());
+        Files.write(KEYSTORE_PATH, output.toByteArray());
+        KEYSTORE_PATH.toFile().deleteOnExit();
+        return KEYSTORE_PATH;
     }
 
     private static X509Certificate certificate(KeyPair keyPair) throws Exception {

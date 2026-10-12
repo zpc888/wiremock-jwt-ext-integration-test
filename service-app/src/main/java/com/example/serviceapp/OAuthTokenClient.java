@@ -4,6 +4,7 @@ import java.time.Instant;
 import java.util.Map;
 
 import com.fasterxml.jackson.annotation.JsonProperty;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.MediaType;
 import org.springframework.http.client.SimpleClientHttpRequestFactory;
 import org.springframework.stereotype.Component;
@@ -16,14 +17,17 @@ class OAuthTokenClient {
 
     private final RestClient restClient;
     private final ServiceProperties properties;
+    private final String applicationName;
     private volatile CachedToken cachedToken;
 
-    OAuthTokenClient(RestClient.Builder builder, ServiceProperties properties) {
+    OAuthTokenClient(RestClient.Builder builder, ServiceProperties properties,
+                     @Value("${spring.application.name}") String applicationName) {
         SimpleClientHttpRequestFactory requestFactory = new SimpleClientHttpRequestFactory();
         requestFactory.setConnectTimeout(properties.getConnectTimeout());
         requestFactory.setReadTimeout(properties.getTokenResponseTimeout());
         this.restClient = builder.requestFactory(requestFactory).build();
         this.properties = properties;
+        this.applicationName = applicationName;
     }
 
     String accessToken() {
@@ -49,6 +53,7 @@ class OAuthTokenClient {
     private CachedToken requestToken() {
         LinkedMultiValueMap<String, String> request = new LinkedMultiValueMap<>();
         request.add("grant_type", "client_credentials");
+        request.add("source_app", applicationName);
         request.add("scope", String.join(" ", properties.getPeer().getRequiredScopes()));
         try {
             TokenResponse token = restClient.post()

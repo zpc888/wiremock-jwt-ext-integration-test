@@ -52,7 +52,7 @@ class TwoInstanceJwksIntegrationTest {
 
     static {
         WIREMOCK.start();
-        INSTANCE_B = startInstance("instance-b", "instance-a", "http://localhost:1");
+        INSTANCE_B = startInstance("instance-b", "http://localhost:1");
         INSTANCE_B_URL = "http://localhost:"
                 + ((WebServerApplicationContext) INSTANCE_B).getWebServer().getPort();
     }
@@ -81,7 +81,7 @@ class TwoInstanceJwksIntegrationTest {
 
     @DynamicPropertySource
     static void configureInstanceA(DynamicPropertyRegistry registry) {
-        registerCommonProperties(registry, "instance-a", "instance-b", () -> INSTANCE_B_URL);
+        registerCommonProperties(registry, "instance-a", () -> INSTANCE_B_URL);
     }
 
     @Test
@@ -91,10 +91,9 @@ class TwoInstanceJwksIntegrationTest {
 
         assertThat(first.getStatusCode()).isEqualTo(HttpStatus.OK);
         assertThat(first.getHeaders().getFirst(RequestIdFilter.HEADER)).isNotBlank();
-        assertThat(first.getBody()).containsEntry("instanceId", "instance-a")
-                .containsEntry("peerInstanceId", "instance-b");
+        assertThat(first.getBody()).containsEntry("applicationName", "instance-a");
         assertThat((Map<String, Object>) first.getBody().get("peerResponse"))
-                .containsEntry("instanceId", "instance-b");
+                .containsEntry("applicationName", "instance-b");
         assertThat(second.getStatusCode()).isEqualTo(HttpStatus.OK);
         WIREMOCK.verify(1, postRequestedFor(urlEqualTo("/oauth/token")));
     }
@@ -113,9 +112,20 @@ class TwoInstanceJwksIntegrationTest {
                 .isEqualTo(HttpStatus.UNAUTHORIZED);
     }
 
+    @Test
+    void privateApiRejectsCallerWithTheSameApplicationName() throws JOSEException {
+        assertThat(callPrivate(signedToken("peer.private", SIGNING_KEY), "instance-b").getStatusCode())
+                .isEqualTo(HttpStatus.FORBIDDEN);
+    }
+
     private ResponseEntity<String> callPrivate(String token) {
+        return callPrivate(token, "instance-a");
+    }
+
+    private ResponseEntity<String> callPrivate(String token, String callerApplicationName) {
         HttpHeaders headers = new HttpHeaders();
         headers.setBearerAuth(token);
+        headers.set(PeerClient.CALLER_APPLICATION_NAME_HEADER, callerApplicationName);
         return client.exchange(INSTANCE_B_URL + "/api/private", HttpMethod.GET, new HttpEntity<>(headers), String.class);
     }
 
@@ -123,14 +133,13 @@ class TwoInstanceJwksIntegrationTest {
         return "http://localhost:" + instanceAPort;
     }
 
-    private static ConfigurableApplicationContext startInstance(String id, String peerId, String peerUrl) {
+    private static ConfigurableApplicationContext startInstance(String applicationName, String peerUrl) {
         return new SpringApplicationBuilder(ServiceApplication.class)
                 .run(
                         "--server.port=0",
                         "--management.server.port=-1",
-                        "--service.instance-id=" + id,
+                        "--spring.application.name=" + applicationName,
                         "--service.peer.base-url=" + peerUrl,
-                        "--service.peer.instance-id=" + peerId,
                         "--service.peer.required-scopes=peer.private",
                         "--service.oauth.token-url=" + WIREMOCK.baseUrl() + "/oauth/token",
                         "--service.oauth.client-id=caller-a",
@@ -146,11 +155,10 @@ class TwoInstanceJwksIntegrationTest {
     }
 
     private static void registerCommonProperties(
-            DynamicPropertyRegistry registry, String id, String peerId, java.util.function.Supplier<String> peerUrl) {
+            DynamicPropertyRegistry registry, String applicationName, java.util.function.Supplier<String> peerUrl) {
         registry.add("management.server.port", () -> -1);
-        registry.add("service.instance-id", () -> id);
+        registry.add("spring.application.name", () -> applicationName);
         registry.add("service.peer.base-url", () -> peerUrl.get());
-        registry.add("service.peer.instance-id", () -> peerId);
         registry.add("service.peer.required-scopes", () -> "peer.private");
         registry.add("service.oauth.token-url", () -> WIREMOCK.baseUrl() + "/oauth/token");
         registry.add("service.oauth.client-id", () -> "caller-a");

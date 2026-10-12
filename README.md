@@ -4,27 +4,26 @@
 
 | API | Access | Behavior |
 | --- | --- | --- |
-| `GET /api/public` | Public | Obtains an OAuth client-credentials token, calls the configured peer's private API, and returns both instance IDs with the peer response. |
+| `GET /api/public` | Public | Obtains an OAuth client-credentials token, calls the configured peer's private API, and returns its application name with the peer response. |
 | `GET /api/private` | Bearer JWT | Verifies the JWT signature and configured header, claim, issuer, audience, and scope rules. |
 
-The service never decides whether it is “app1” or “app2” in code. `service.instance-id`, `service.peer.*`, OAuth settings, and JWT verification settings determine the role at deployment time.
+The service never decides whether it is “app1” or “app2” in code. `spring.application.name`, `service.peer.*`, OAuth settings, and JWT verification settings determine the role at deployment time.
 
 ## Deploy twice
 
-The checked-in `instance-a` and `instance-b` profiles are non-secret examples:
+The checked-in `jwks` and `keystore` profiles are non-secret verification examples:
 
 ```bash
-./gradlew :service-app:bootRun --args='--spring.profiles.active=instance-a'
-./gradlew :service-app:bootRun --args='--spring.profiles.active=instance-b --server.port=8082 --management.server.port=8083'
+./gradlew :service-app:bootRun --args='--spring.profiles.active=jwks'
+./gradlew :service-app:bootRun --args='--spring.profiles.active=keystore --server.port=8082 --management.server.port=8083'
 ```
 
 Override all actual deployment values with environment variables or standard Spring external configuration. Do not place client secrets or keystore passwords in versioned YAML.
 
 | Property | Environment variable | Purpose |
 | --- | --- | --- |
-| `service.instance-id` | `SERVICE_INSTANCE_ID` | Required local deployment identity. |
+| `spring.application.name` | `SPRING_APPLICATION_NAME` | Required local deployment identity. |
 | `service.peer.base-url` | `SERVICE_PEER_BASE_URL` | Required peer base URL. The service calls `/api/private`. |
-| `service.peer.instance-id` | `SERVICE_PEER_INSTANCE_ID` | Required peer identity for diagnostics. It must differ from the local ID. |
 | `service.peer.required-scopes` | `SERVICE_PEER_REQUIRED_SCOPES` | Scopes requested from OAuth and expected by the peer. |
 | `service.oauth.token-url` | `SERVICE_OAUTH_TOKEN_URL` | OAuth client-credentials endpoint. |
 | `service.oauth.client-id` | `SERVICE_OAUTH_CLIENT_ID` | OAuth Basic-auth user. |
@@ -71,7 +70,7 @@ service:
       alias: jwt-verifier
 ```
 
-The selected alias must resolve to an RSA certificate. JKS and PKCS12 are supported.
+The selected alias must resolve to an RSA certificate. JKS and PKCS12 are supported. The `keystore` profile uses `file:${java.io.tmpdir}/service-app-jwt-verifier.p12` by default; its test fixture generates an RSA key and certificate dynamically and writes the resulting PKCS12 keystore there. Override `SERVICE_JWT_KEYSTORE_LOCATION`, password, type, and alias for deployed environments.
 
 ## Runtime behavior
 
@@ -79,6 +78,7 @@ The selected alias must resolve to an RSA certificate. JKS and PKCS12 are suppor
 - Tokens require `access_token` and positive `expires_in`; they are cached per service with single-flight refresh 30 seconds before expiry. Short-lived tokens are used once.
 - No call retries occur. Token/peer transport failures and peer authorization failures become sanitized RFC 9457 `502` responses with `code: peer_unavailable`.
 - JWT failures return RFC 9457 `401 invalid_token`; insufficient scope returns `403 insufficient_scope`.
+- Peer calls carry the caller's `spring.application.name` in `X-Caller-App-Name`. Private APIs reject matching caller and callee names with `403 self_private_call`.
 - `X-Request-Id` is accepted only when ASCII-safe and 1–128 characters; otherwise a UUID is generated. It is forwarded to the peer and returned in response headers and problem details.
 - HTTP endpoint URLs emit a startup warning. Deploy behind a service mesh or sidecar that provides transport encryption.
 
