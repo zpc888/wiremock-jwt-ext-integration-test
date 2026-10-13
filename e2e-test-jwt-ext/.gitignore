@@ -2,3 +2,5 @@ containers-config/wiremock/extension-jwt/*.jar
 containers-config/pre-defined-keys/private.pem
 containers-config/pre-defined-keys/public.crt
 containers-config/pre-defined-keys/truststore.jks
+.gradle/
+build/

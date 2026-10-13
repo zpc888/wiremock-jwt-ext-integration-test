@@ -1,3 +1,4 @@
 rootProject.name = 'wiremock-jwt-ext-integration-test'
 
 include 'service-app'
+include 'e2e-test-jwt-ext'

@@ -1,0 +1,34 @@
+dependencies {
+    implementation project(':service-app')
+
+    testImplementation 'org.springframework.boot:spring-boot-starter-test'
+    testImplementation 'org.springframework.boot:spring-boot-starter-restclient'
+    testImplementation 'com.nimbusds:nimbus-jose-jwt:9.48'
+}
+
+def composeScript = layout.projectDirectory.file('compose.sh').asFile
+
+tasks.register('composeUp', Exec) {
+    workingDir = projectDir
+    commandLine 'sh', '-c', './compose.sh up --build -d || { ./compose.sh down --remove-orphans; exit 1; }'
+}
+
+tasks.register('composeDown', Exec) {
+    workingDir = projectDir
+    commandLine composeScript.absolutePath, 'down', '--remove-orphans'
+    ignoreExitValue = true
+}
+
+tasks.named('test') {
+    useJUnitPlatform()
+    dependsOn tasks.named('composeUp')
+    finalizedBy tasks.named('composeDown')
+    mustRunAfter tasks.named('composeUp')
+    mustRunAfter ':service-app:test'
+    outputs.upToDateWhen { false }
+    systemProperty 'e2e.serviceJwksPort', providers.environmentVariable('SERVICE_JWKS_HOST_PORT').getOrElse('8181')
+    systemProperty 'e2e.serviceKeystorePort', providers.environmentVariable('SERVICE_KEYSTORE_HOST_PORT').getOrElse('8182')
+    systemProperty 'e2e.wiremockJwtHeaderPort',
+            providers.environmentVariable('WIREMOCK_JWT_HEADER_HOST_PORT').getOrElse('8187')
+    systemProperty 'e2e.oauthClientSecret', providers.environmentVariable('OAUTH_CLIENT_SECRET').getOrElse('secret')
+}

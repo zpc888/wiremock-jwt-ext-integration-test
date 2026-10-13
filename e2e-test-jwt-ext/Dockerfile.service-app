@@ -4,6 +4,7 @@ WORKDIR /workspace
 
 COPY gradlew settings.gradle build.gradle ./
 COPY gradle gradle
+COPY e2e-test-jwt-ext/build.gradle e2e-test-jwt-ext/build.gradle
 COPY service-app service-app
 
 RUN chmod +x gradlew \
